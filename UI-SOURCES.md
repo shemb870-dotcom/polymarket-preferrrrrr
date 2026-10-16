@@ -8,3 +8,7 @@
 - https://github.com/lucide-icons/lucide ：沿用项目已有 lucide-react 图标。
 
 本次实际改动为原创 CSS、页面布局和手册页面。没有下载付费模板，没有把“浏览参考仓库”表述为“安装技能”。未添加新的运行时依赖。
+
+## 第二轮改版
+
+参考 https://github.com/satnaing/shadcn-admin （MIT）的浅色侧栏、导航选中态与主工作区布局，及 Tremor 的指标层次。使用原创 JSX/CSS 实现，未复制模板代码。新增研究流程入口与真实工作区计数，改用石板灰和靛蓝视觉体系。

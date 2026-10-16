@@ -1,0 +1,32 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { ArrowUpRight, BrainCircuit, ExternalLink, FlaskConical, Sparkles } from 'lucide-react';
+import type { Action,Workspace } from '../lib/types';
+import { opportunities } from '../lib/opportunities';
+type Status={configured:boolean;model:string;dailyLimit:number;message:string};
+const pct=(v:number|null)=>v===null?'—':`${(v*100).toFixed(1)}%`;
+export function AIControls({data,busy,act}:{data:Workspace;busy:boolean;act:(action:Action,success?:string)=>Promise<boolean>}){
+  const [status,setStatus]=useState<Status|null>(null);
+  useEffect(()=>{fetch('/api/ai-status',{cache:'no-store'}).then(r=>r.ok?r.json() as Promise<Status>:Promise.reject()).then(setStatus).catch(()=>setStatus(null));},[]);
+  const count=data.aiUsage?.day===new Date().toISOString().slice(0,10)?data.aiUsage.attempts:0;
+  return <section className="panel ai-control"><div className="hint"><strong>聊天研究 · 无需额外模型 API</strong><p>连接事件镜的个人插件后，可在聊天中让我读取市场、完成检索并保存报告。报告进入研究档案，来源标为“聊天研究”。只在你发起任务时执行，不会后台持续运行。</p><a className="text-button" href="/chat-research">查看连接与使用说明 →</a></div><div className="ai-control-title"><BrainCircuit size={24}/><div><span className="eyebrow">EVIDENCE FIRST · AI RESEARCH</span><h2>让 AI 做研究，让证据支撑判断。</h2></div><span className="tag">{!status?'状态待确认':status.configured?'已配置 · 待调用验证':'模型待连接'}</span></div><p>{status?.message||'暂时无法读取模型连接状态。'} 每日最多 3 次请求；每次最多 2 次搜索工具调用。次数限制不等于美元预算，API 费用另计。</p><div className="ai-control-bottom"><span>今日请求 <b>{count} / 3</b> · UTC 日 · {status?.model||'—'}</span><button className="button primary" disabled={busy||!status?.configured||data.mode!=='live'} onClick={()=>void act({type:'ai_analyze'},'已完成一项待研究市场的检查；结果见研究档案。')}><Sparkles size={15}/>分析下一个关注事件</button><button className="button" disabled={busy||!status?.configured||data.mode!=='live'} onClick={()=>void act({type:'ai_settings',enabled:!data.settings.aiAuto},'自动研究设置已保存')}>{data.settings.aiAuto?'关闭自动研究':'启用自动研究'}</button></div><p className="field-help">自动研究仅在真实工作区页面打开且可见时运行，每分钟检查一次。每次处理一个关注市场；同一市场至少间隔 1 小时，规则/证据/价格显著变化或研究超过 6 小时才重做。开启后会消耗模型 API 额度。演示事件不调用 AI。</p>{data.aiUsage&&<div className="hint">{data.aiUsage.message} · {new Date(data.aiUsage.lastAttempt).toLocaleString('zh-CN')}</div>}</section>;
+}
+const strategies=[
+  {name:'事件进度与基准率',tag:'研究流程',body:'先看历史可比案例，再检查政策、选举或公司事件的当前进度和剩余障碍。找不到可比样本就不虚构基础概率。',risk:'案例不可比、新闻已被价格反映。'},
+  {name:'正反证据与条件变化',tag:'研究流程',body:'并列支持 YES 与 NO 的最强材料，区分宣布、批准和生效。新证据、规则变化和显著价差触发复核。',risk:'同源转载、时间滞后、模型误读条款。'},
+  {name:'保守概率与成本压力测试',tag:'已实现',body:'在 AI 主观区间下界上，扣除指示价格和自设的每份成本，检查结论是否仍为正。这里只用于筛选待核验事件。',risk:'未接可成交买价与盘口深度，不能称为可执行优势。'},
+  {name:'跨市场逻辑一致性',tag:'研究储备',body:'仅对结算规则、期限、结果集合一致的互斥且穷尽市场，检验组合价格约束。当前版本不扫描此策略。',risk:'规则差异、非穷尽结果、手续费及无法同时成交。'},
+];
+const repos=[
+  {name:'Polymarket / agent-skills',url:'https://github.com/Polymarket/agent-skills',role:'官方行情、盘口与 API 接入资料；仅参考数据接口，不启用签名与交易流程。'},
+  {name:'Metaculus / forecasting-tools',url:'https://github.com/Metaculus/forecasting-tools',role:'预测研究、汇总与成本管理参考。Python 框架未嵌入本站；多次模型输出不等于独立专家。'},
+  {name:'Polymarket / agents',url:'https://github.com/Polymarket/agents',role:'官方 AI 代理框架参考；包含自主交易能力，当前站点不执行该代码。'},
+  {name:'OpenBB / Open Data Platform',url:'https://github.com/openbq-org/OpenBB',role:'金融数据接入候选；Python 服务和数据授权需单独评估，目前未集成。'},
+];
+export function ResearchLab({data,busy,act,openMarket}:{data:Workspace;busy:boolean;act:(a:Action,s?:string)=>Promise<boolean>;openMarket:(id:string)=>void}){
+  const [view,setView]=useState('稳健候选'),[cost,setCost]=useState(2);
+  const rows=opportunities(data.markets,cost/100);
+  const ready=rows.filter(r=>!r.blockers.length);
+  const selected=(view==='待补研究'?rows.filter(r=>r.side==='YES'&&r.blockers.length):view==='稳健候选'?ready.filter(r=>(r.conservativeEv??-1)>0):ready).sort((a,b)=>view==='高赔率'?(b.odds||0)-(a.odds||0):view==='高预估胜率'?(b.p||0)-(a.p||0):(b.conservativeEv??-99)-(a.conservativeEv??-99));
+  return <div className="research-lab"><AIControls data={data} busy={busy} act={act}/><section className="panel"><div className="panel-heading"><h2><FlaskConical size={19}/>机会实验室<small>SCENARIOS, NOT ORDERS</small></h2></div><p className="panel-description">赔率倍数 = 1 ÷ 指示价格（含本金、未扣成本）。高倍数通常对应较低市场概率。AI 估计未经历史校准；这里展示假设持有至正常结算的单份期望净收益，不是账户赚钱的概率。</p><div className="filters"><div className="category-tabs">{['稳健候选','高赔率','高预估胜率','待补研究'].map(v=><button className={view===v?'chosen':''} key={v} onClick={()=>setView(v)}>{v}</button>)}</div><label className="cost-input">成本压力假设<input aria-label="每份成本假设（美分）" type="number" min="0" max="20" step="0.5" value={cost} onChange={e=>setCost(Math.max(0,Math.min(20,Number(e.target.value)||0)))}/>¢ / 份</label></div><p className="panel-description">默认 2¢ 仅为可调整的费用与滑点压力情景，不是平台实际费率。公式：主观概率 − 指示价格 − 每份成本。NO 的保守概率使用 1 − YES 区间上界。所有候选均待核验可成交买价、深度和实际费用。</p><div className="table-wrap"><table><thead><tr><th>事件 / 方向</th><th>指示价格</th><th>回款倍数</th><th>AI 主观区间</th><th>保守情景净收益 / 份</th><th>研究状态</th></tr></thead><tbody>{selected.map(r=><tr key={`${r.market.id}-${r.side}`}><td><button className="text-button" onClick={()=>openMarket(r.market.id)}>{r.market.question.replace('【示例】','')} <ArrowUpRight size={13}/></button><small className="block">{r.side}</small></td><td>{pct(r.price)}</td><td>{r.odds?.toFixed(2)||'—'}×</td><td>{r.low===null?'—':`${pct(r.low)} – ${pct(r.high)}`}<small className="block">中心 {pct(r.p)}</small></td><td>{r.conservativeEv===null?'—':`${r.conservativeEv>=0?'+':''}${(r.conservativeEv*100).toFixed(1)}¢`}</td><td>{r.blockers.length?r.blockers.join(' · '):'仅情景候选 · 未验证盘口'}</td></tr>)}</tbody></table>{!selected.length&&<div className="empty"><BrainCircuit size={30}/><p>当前没有符合条件的事件。保存聊天研究或连接模型并研究真实市场后，才会产生候选；系统不会补造胜率。</p><button className="text-button" onClick={()=>setView('待补研究')}>查看需要补充的研究</button></div>}</div></section><div className="strategy-grid">{strategies.map(s=><section className="panel settings-card" key={s.name}><span className="tag">{s.tag}</span><h3>{s.name}</h3><p>{s.body}</p><p className="field-help">失效情形：{s.risk}</p></section>)}</div><section className="panel settings-card"><h2>GitHub 工具观察名单</h2><p>已审阅公开资料。下列是工具与方法来源，不是已验证盈利策略；除现有技能外，没有把这些 Python 框架冒称为已安装到网站。</p>{repos.map(r=><div className="repo-row" key={r.name}><a href={r.url} target="_blank" rel="noreferrer">{r.name} <ExternalLink size={14}/></a><p>{r.role}</p></div>)}</section></div>;
+}

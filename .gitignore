@@ -54,3 +54,11 @@ next-env.d.ts
 /.codex/
 /outputs/
 /work/
+
+*.log
+*.tsbuildinfo
+*.sqlite*
+*.db
+.dev.vars*
+*.zip
+*.tar.gz
