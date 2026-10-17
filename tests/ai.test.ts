@@ -5,6 +5,7 @@ import { parseAIResponse,requestBody,runAIResearch } from '../lib/ai-research.ts
 import { aiDue,opportunities } from '../lib/opportunities.ts';
 const now='2026-10-13T12:00:00.000Z';
 function market(){return {...createDemoWorkspace('test').markets[0],synthetic:false,updatedAt:now,endsAt:'2026-12-01T00:00:00Z',probability:0.4,watched:true};}
+function withBook(m:any){const side=(ask:number)=>({bestBid:ask-0.01,bestAsk:ask,spread:0.01,execAsk:ask,execShares:25,fullyFilled:true,fetchedAt:now});return {...m,book:{yes:side(0.4),no:side(0.6),fetchedAt:now}};}
 function response(overrides:Record<string,unknown>={}){
  const f={summary:'研究结论',supporting:['支持 [1]'],opposing:['反对 [2]'],missing:[],nextSteps:['核验'],probability:0.6,low:0.5,high:0.7,abstain:false,baseRate:'暂无可比案例',invalidation:'新决议',sources:[{title:'一',url:'https://one.example/a',claim:'来源一',publishedAt:'2026-10-12',stance:'yes'},{title:'二',url:'https://two.example/b',claim:'来源二',publishedAt:'',stance:'no'}],...overrides};
  return {id:'response-test',status:'completed',output:[{type:'web_search_call',action:{sources:[{url:'https://one.example/a'},{url:'https://two.example/b'}]}},{type:'message',content:[{type:'output_text',text:JSON.stringify(f)}]}],usage:{input_tokens:100,output_tokens:200}};
@@ -27,7 +28,7 @@ test('bad intervals and explicit abstentions cannot create actionable forecasts'
 });
 test('NO bounds reverse correctly and costs reduce conservative scenario value',()=>{
  const m=market();m.reports=[parseAIResponse(response(),m,'test',now)];
- const [yes,no]=opportunities([m],0.02,Date.parse(now));
+ const [yes,no]=opportunities([withBook(m)],0.02,Date.parse(now));
  assert.ok(Math.abs(yes.conservativeEv!-0.08)<1e-9);
  assert.ok(Math.abs(no.low!-0.3)<1e-9);assert.equal(no.high,0.5);
  assert.ok(Math.abs(no.conservativeEv!+0.32)<1e-9);

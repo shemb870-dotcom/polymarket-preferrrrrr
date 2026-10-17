@@ -62,6 +62,7 @@ export function createDemoWorkspace(user: string): Workspace {
       reports: [],
       baseline,
       ruleHash: `demo-rules-${index}-v1`,
+      tokenIds: null,
     };
   });
   markets[0].reports = [buildReport(markets[0], '2026-10-12T05:30:00.000Z')];

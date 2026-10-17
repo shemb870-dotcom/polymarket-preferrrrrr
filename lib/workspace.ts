@@ -10,6 +10,7 @@ import { runAIResearch } from './ai-research';
 import { aiDue } from './opportunities';
 import { paperBuy, paperClose } from './paper';
 import { fetchMarkets, mergeSnapshot } from './markets';
+import { bookFresh, fetchBookSnapshot } from './clob.ts';
 import type { Mode, Workspace, Market } from './types';
 
 const id = z.string().min(1).max(250);
@@ -22,6 +23,7 @@ const actionSchema = z.discriminatedUnion('type', [
   z.object({type:z.literal('ai_analyze'), id:id.optional(),automatic:z.boolean().optional()}),
   z.object({type:z.literal('ai_settings'),enabled:z.boolean()}),
   z.object({type:z.literal('refresh')}),
+  z.object({type:z.literal('refresh_books')}),
   z.object({type:z.literal('mark_read'), id}),
   z.object({type:z.literal('settings'), thresholdPp:z.number().min(0.1).max(100),pollSeconds:z.number().int().min(30).max(86400)}),
   z.object({type:z.literal('set_mode'), mode:z.enum(['demo','live'])}),
@@ -155,6 +157,23 @@ export async function act(owner:string,name:string,input:unknown):Promise<Worksp
         }
         state.health={status:'ok',message:'已从 Polymarket 获取快照。页面打开时轮询关注市场及持仓；不提供后台推送。',checkedAt:now};
       }catch(e){state.health={status:'error',message:e instanceof Error?e.message:'无法连接行情服务。',checkedAt:now};}
+      break;
+    }
+    case 'refresh_books': {
+      if (state.mode !== 'live') throw new RequestError('请切换到真实市场工作区再刷新盘口。');
+      const targets = state.markets.filter(m => !m.synthetic && m.status === 'active' && m.watched && m.tokenIds && !(m.book && bookFresh(m.book.fetchedAt)));
+      if (!targets.length) { state.health = { ...state.health, message: '盘口快照均在有效期内，无需重复刷新。', checkedAt: now }; break; }
+      const failures: string[] = [];
+      let okCount = 0;
+      for (let i = 0; i < targets.length; i += 5) {
+        const chunk = targets.slice(i, i + 5);
+        const results = await Promise.allSettled(chunk.map(async m => ({ id: m.id, snapshot: await fetchBookSnapshot(m.tokenIds!, now) })));
+        results.forEach((r) => {
+          if (r.status === 'fulfilled') { okCount++; state.markets = state.markets.map(m => m.id === r.value.id ? { ...m, book: r.value.snapshot } : m); }
+          else failures.push(r.reason instanceof Error ? r.reason.message : '请求失败');
+        });
+      }
+      state.health = { ...state.health, message: `盘口快照已更新 ${okCount} 个市场${failures.length ? `，${failures.length} 个失败（${failures[0]}）` : ''}。快照有效期 10 分钟，仅供研究参考，不代表实时可成交。`, checkedAt: now };
       break;
     }
   }

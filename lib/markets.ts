@@ -1,4 +1,5 @@
 import type { Alert, Market } from './types';
+import { extractTokenIds } from './clob.ts';
 const GAMMA = 'https://gamma-api.polymarket.com';
 type Raw = Record<string, unknown>;
 const string = (v: unknown) => typeof v === 'string' ? v : '';
@@ -20,7 +21,7 @@ export function normalizeMarket(raw: Raw, now = new Date().toISOString()): Marke
   const resolutionSource = string(raw.resolutionSource);
   const endsAt = date(raw.endDate);
   const updatedAt = date(raw.updatedAt);
-  return { id: String(raw.id), slug: string(raw.slug), question: string(raw.question), category: string(raw.category) || '其他', rules, resolutionSource, probability, changePp: 0, volume: finite(raw.volumeNum ?? raw.volume), liquidity: finite(raw.liquidityNum ?? raw.liquidity), updatedAt, endsAt, status: raw.closed === true || raw.active === false ? 'closed' : 'active', synthetic: false, watched: false, history: probability === null ? [] : [{at: now, p: probability}], evidence: [], reports: [], baseline: probability, ruleHash: JSON.stringify([rules,resolutionSource,endsAt,raw.closed,raw.active]) };
+  return { id: String(raw.id), slug: string(raw.slug), question: string(raw.question), category: string(raw.category) || '其他', rules, resolutionSource, probability, changePp: 0, volume: finite(raw.volumeNum ?? raw.volume), liquidity: finite(raw.liquidityNum ?? raw.liquidity), updatedAt, endsAt, status: raw.closed === true || raw.active === false ? 'closed' : 'active', synthetic: false, watched: false, history: probability === null ? [] : [{at: now, p: probability}], evidence: [], reports: [], baseline: probability, ruleHash: JSON.stringify([rules,resolutionSource,endsAt,raw.closed,raw.active]), tokenIds: extractTokenIds(raw), book: null };
 }
 export function parseSlug(input: string): string {
   let slug = input.trim();
@@ -56,5 +57,5 @@ export function mergeSnapshot(old: Market, current: Market, thresholdPp: number,
   if (old.watched && current.ruleHash !== old.ruleHash) alerts.push({id:crypto.randomUUID(),marketId:old.id,title:'结算信息变化',message:'规则、结算来源、截止时间或市场状态发生变化，请核对官方条款。',kind:'rules',createdAt:now,read:false});
   const history = [...old.history];
   if (usable && (history.length === 0 || history[history.length-1].p !== current.probability)) history.push({at:now,p:current.probability!});
-  return {market:{...current,watched:old.watched,evidence:old.evidence,reports:old.reports,history:history.slice(-500),changePp:delta,baseline:usable && (old.baseline === null || alerts.some(a=>a.kind==='price')) ? current.probability : old.baseline}, alerts};
+  return {market:{...current,tokenIds:current.tokenIds??old.tokenIds,book:old.book??null,watched:old.watched,evidence:old.evidence,reports:old.reports,history:history.slice(-500),changePp:delta,baseline:usable && (old.baseline === null || alerts.some(a=>a.kind==='price')) ? current.probability : old.baseline}, alerts};
 }
